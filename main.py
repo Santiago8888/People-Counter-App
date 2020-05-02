@@ -27,6 +27,7 @@ import socket
 import json
 import cv2
 
+import numpy as np
 import logging as log
 import paho.mqtt.client as mqtt
 
@@ -74,6 +75,20 @@ def connect_mqtt():
 
     return client
 
+def preprocessing(input_image, height, width):
+    '''
+    Given an input image, height and width:
+    - Resize to width and height
+    - Transpose the final "channel" dimension to be first
+    - Reshape the image to add a "batch" of 1 at the start 
+    '''
+    image = np.copy(input_image)
+    image = cv2.resize(image, (width, height))
+    image = image.transpose((2,0,1))
+    image = image.reshape(1, 3, height, width)
+
+    return image
+
 
 def infer_on_stream(args, client):
     """
@@ -85,13 +100,35 @@ def infer_on_stream(args, client):
     :return: None
     """
     # Initialise the class
+    log.info('Initialise the class')
     infer_network = Network()
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
     ### TODO: Load the model through `infer_network` ###
+    exec_net = infer_network.load_model()
+    log.info('Exec Net.')
 
     ### TODO: Handle the input stream ###
+    TEST_IMAGE = 'image.jpeg'
+    image = cv2.imread(TEST_IMAGE)
+    preprocessed_image = preprocessing(image, 300, 300)
+
+    log.info('Preprocessing.')
+    input_blob = next(iter(exec_net.inputs))
+    log.info('Preprocessed.')
+
+    result = exec_net.infer({input_blob: preprocessed_image})
+
+    log.info("result")
+    log.info(result)
+
+
+#    async_inference(exec_net, input_blob, preprocessed_image)
+
+
+
+
 
     ### TODO: Loop until stream is over ###
 
@@ -124,6 +161,7 @@ def main():
     :return: None
     """
     # Grab command line args
+    log.getLogger().setLevel(log.INFO)
     args = build_argparser().parse_args()
     # Connect to the MQTT server
     client = connect_mqtt()
