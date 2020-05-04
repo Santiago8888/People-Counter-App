@@ -24,8 +24,32 @@
 
 import os
 import sys
+import cv2
+import numpy as np
+
 import logging as log
 from openvino.inference_engine import IENetwork, IECore, IEPlugin
+
+
+def preprocessing(input_image, height, width):
+    '''
+    Given an input image, height and width:
+    - Resize to width and height
+    - Transpose the final "channel" dimension to be first
+    - Reshape the image to add a "batch" of 1 at the start 
+    '''
+    height, width, channels = input_image.shape
+    log.info(height)
+    log.info(width)
+    log.info(channels)
+
+
+    image = np.copy(input_image)
+    image = cv2.resize(image, (width, height))
+    image = image.transpose((2,0,1))
+    image = image.reshape(1, 3, height, width)
+
+    return image
 
 
 class Network:
@@ -64,52 +88,17 @@ class Network:
         log.debug('Unsupported Layers: ')
         log.debug(unsupported_layers)
 
-        exec_net = plugin.load_network(net, "CPU")
-        return exec_net
-
-
-
-    """        
-        net = IENetwork(model=self.model_xml, weights=self.model_bin)
-        plugin = IEPlugin(device="CPU")
-        exec_net = plugin.load(network=net)
-
-        return exec_net
-#        res = exec_net.infer({'data': img})
-
-#>>> net = IENetwork(model=path_to_xml_file, weights=path_to_bin_file)
-#>>> plugin = IEPlugin(device="CPU")
-#>>> exec_net = plugin.load(network=net, num_requsts=2)
-#>>> res = exec_net.infer({'data': img})
-
-
-
-        exec_net.
-
-        input_blob = next(iter(net.inputs))
-
-        # Get the input shape
-        input_shape = net.inputs[input_blob].shape        
-
-        log.info("IR successfully loaded into Inference Engine.")
-
-        ### TODO: Load the model ###
-        ### TODO: Check for supported layers ###
-        ### TODO: Add any necessary extensions ###
-        ### TODO: Return the loaded inference plugin ###
-        ### Note: You may need to update the function parameters. ###
-        return exec_net, input_shape
-    """
+        self.exec_net = plugin.load_network(net, "CPU") 
 
     def get_input_shape(self):
         ### TODO: Return the shape of the input layer ###
         return
 
-    def exec_net(self):
+#    def exec_net(self):
         ### TODO: Start an asynchronous request ###
         ### TODO: Return any necessary information ###
         ### Note: You may need to update the function parameters. ###
-        return
+#        return
 
     def wait(self):
         ### TODO: Wait for the request to be complete. ###
@@ -117,7 +106,31 @@ class Network:
         ### Note: You may need to update the function parameters. ###
         return
 
-    def get_output(self):
+    def get_output(self, image):
+        log.info('Exec Net.')
+
+        ### TODO: Handle the input stream ###
+#        TEST_IMAGE = 'car.jpg'
+#        image = cv2.imread(TEST_IMAGE)
+        preprocessed_image = preprocessing(image, 300, 300)
+
+        log.debug('Preprocessing.')
+        input_blob = next(iter(self.exec_net.inputs))
+        output_blob = next(iter(self.exec_net.outputs))
+
+        log.debug('Preprocessed.')
+
+        result = self.exec_net.infer({input_blob: preprocessed_image})
+
+        log.debug("result")
+        log.debug(output_blob)
+
+
+        result = self.exec_net.requests[0].outputs[output_blob]
+
+        log.info(result[0][0][0])
+
+
         ### TODO: Extract and return the output results
         ### Note: You may need to update the function parameters. ###
-        return
+        return result

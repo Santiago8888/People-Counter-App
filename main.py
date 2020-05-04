@@ -75,19 +75,21 @@ def connect_mqtt():
 
     return client
 
-def preprocessing(input_image, height, width):
+def draw_boxes(frame, result, width, height):
     '''
-    Given an input image, height and width:
-    - Resize to width and height
-    - Transpose the final "channel" dimension to be first
-    - Reshape the image to add a "batch" of 1 at the start 
+    Draw bounding boxes onto the frame.
     '''
-    image = np.copy(input_image)
-    image = cv2.resize(image, (width, height))
-    image = image.transpose((2,0,1))
-    image = image.reshape(1, 3, height, width)
 
-    return image
+    for box in result[0][0]: # Output shape is 1x1x100x7
+        conf = box[2]
+        if conf >= 0.5:
+            xmin = int(box[3] * width)
+            ymin = int(box[4] * height)
+            xmax = int(box[5] * width)
+            ymax = int(box[6] * height)
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
+
+    return frame
 
 
 def infer_on_stream(args, client):
@@ -101,30 +103,43 @@ def infer_on_stream(args, client):
     """
     # Initialise the class
     log.info('Initialise the class')
+
     infer_network = Network()
+    infer_network.load_model()
+
     # Set Probability threshold for detections
-    prob_threshold = args.prob_threshold
+#    prob_threshold = args.prob_threshold
 
     ### TODO: Load the model through `infer_network` ###
-    exec_net = infer_network.load_model()
-    log.info('Exec Net.')
 
-    ### TODO: Handle the input stream ###
-    TEST_IMAGE = 'image.jpeg'
-    image = cv2.imread(TEST_IMAGE)
-    preprocessed_image = preprocessing(image, 300, 300)
+    i = 0
+    log.info('One')
+    cap = cv2.VideoCapture("resources/video.mp4")
+    while cap.isOpened():
+        i += 1
+        flag, frame = cap.read()
+        log.info(frame)
 
-    log.info('Preprocessing.')
-    input_blob = next(iter(exec_net.inputs))
-    log.info('Preprocessed.')
+        if not flag:
+            break
 
-    result = exec_net.infer({input_blob: preprocessed_image})
+        image = cv2.resize(frame, (300, 300))
+        result = infer_network.get_output(image)
 
-    log.info("result")
-    log.info(result)
+        log.info('Result')
+        log.info(result)
+        frame = draw_boxes(frame, result, 768, 432)
+        log.info('Be Frame')
+        log.info(frame)
+
+        sys.stdout.buffer.write(frame)
+        sys.stdout.flush()
 
 
-#    async_inference(exec_net, input_blob, preprocessed_image)
+    log.info('Frames: ')
+    log.info(i)
+
+
 
 
 
