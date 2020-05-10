@@ -75,14 +75,10 @@ def connect_mqtt():
 
     return client
 
-def draw_boxes(frame, result, width, height):
-    '''
-    Draw bounding boxes onto the frame.
-    '''
-
-    for box in result[0][0]: # Output shape is 1x1x100x7
+def draw_boxes(frame, result, width, height, prob_threshold):
+    for box in result[0][0]: 
         conf = box[2]
-        if conf >= 0.5:
+        if conf >= prob_threshold:
             xmin = int(box[3] * width)
             ymin = int(box[4] * height)
             xmax = int(box[5] * width)
@@ -90,6 +86,27 @@ def draw_boxes(frame, result, width, height):
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
 
     return frame
+
+
+def preprocessing(input_image, height, width):
+    '''
+    Given an input image, height and width:
+    - Resize to width and height
+    - Transpose the final "channel" dimension to be first
+    - Reshape the image to add a "batch" of 1 at the start 
+    '''
+    height, width, channels = input_image.shape
+    log.debug(height)
+    log.debug(width)
+    log.debug(channels)
+
+
+    image = np.copy(input_image)
+    image = cv2.resize(image, (width, height))
+    image = image.transpose((2,0,1))
+    image = image.reshape(1, 3, height, width)
+
+    return image
 
 
 def infer_on_stream(args, client):
@@ -101,73 +118,32 @@ def infer_on_stream(args, client):
     :param client: MQTT client
     :return: None
     """
-    # Initialise the class
-    log.debug('Initialise the class')
 
     infer_network = Network()
     infer_network.load_model()
-
-    # Set Probability threshold for detections
-#    prob_threshold = args.prob_threshold
-
-    ### TODO: Load the model through `infer_network` ###
-
-    i = 0
-    log.debug('One')
+    prob_threshold = args.prob_threshold
     cap = cv2.VideoCapture("resources/video.mp4")
-    while cap.isOpened():
-        i += 1
-        flag, frame = cap.read()
-        log.debug(frame)
 
-        if not flag:
-            break
+    while cap.isOpened():
+        flag, frame = cap.read()
+        if not flag: break
 
         image = cv2.imread('image.jpeg')
-        #image = cv2.resize(frame, (300, 300))
-        result = infer_network.get_output(image)
+        preprocessed_image = preprocessing(image, 300, 300)
 
-        log.debug('Result')
-        log.info(result)
-        return
-        
-        frame = draw_boxes(frame, result, 768, 432)
-        log.debug('Be Frame')
-        log.debug(frame)
+        result = infer_network.get_output(preprocessed_image)
+        frame = draw_boxes(frame, result, 768, 432, prob_threshold)
 
         sys.stdout.buffer.write(frame)
         sys.stdout.flush()
 
 
-    log.debug('Frames: ')
-    log.debug(i)
 
 
-
-
-
-
-
-    ### TODO: Loop until stream is over ###
-
-        ### TODO: Read from the video capture ###
-
-        ### TODO: Pre-process the image as needed ###
-
-        ### TODO: Start asynchronous inference for specified request ###
-
-        ### TODO: Wait for the result ###
-
-            ### TODO: Get the results of the inference request ###
-
-            ### TODO: Extract any desired stats from the results ###
-
-            ### TODO: Calculate and send relevant information on ###
-            ### current_count, total_count and duration to the MQTT server ###
-            ### Topic "person": keys of "count" and "total" ###
-            ### Topic "person/duration": key of "duration" ###
-
-        ### TODO: Send the frame to the FFMPEG server ###
+        ### TODO: Calculate and send relevant information on ###
+        ### current_count, total_count and duration to the MQTT server ###
+        ### Topic "person": keys of "count" and "total" ###
+        ### Topic "person/duration": key of "duration" ###
 
         ### TODO: Write an output image if `single_image_mode` ###
 
@@ -178,6 +154,7 @@ def main():
 
     :return: None
     """
+
     # Grab command line args
     log.getLogger().setLevel(log.INFO)
     args = build_argparser().parse_args()
