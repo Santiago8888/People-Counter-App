@@ -102,7 +102,7 @@ def infer_on_stream(args, client):
     :return: None
     """
     # Initialise the class
-    log.info('Initialise the class')
+    log.debug('Initialise the class')
 
     infer_network = Network()
     infer_network.load_model()
@@ -113,31 +113,34 @@ def infer_on_stream(args, client):
     ### TODO: Load the model through `infer_network` ###
 
     i = 0
-    log.info('One')
+    log.debug('One')
     cap = cv2.VideoCapture("resources/video.mp4")
     while cap.isOpened():
         i += 1
         flag, frame = cap.read()
-        log.info(frame)
+        log.debug(frame)
 
         if not flag:
             break
 
-        image = cv2.resize(frame, (300, 300))
+        image = cv2.imread('image.jpeg')
+        #image = cv2.resize(frame, (300, 300))
         result = infer_network.get_output(image)
 
-        log.info('Result')
+        log.debug('Result')
         log.info(result)
+        return
+        
         frame = draw_boxes(frame, result, 768, 432)
-        log.info('Be Frame')
-        log.info(frame)
+        log.debug('Be Frame')
+        log.debug(frame)
 
         sys.stdout.buffer.write(frame)
         sys.stdout.flush()
 
 
-    log.info('Frames: ')
-    log.info(i)
+    log.debug('Frames: ')
+    log.debug(i)
 
 
 

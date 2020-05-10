@@ -25,6 +25,7 @@
 import os
 import sys
 import cv2
+import time
 import numpy as np
 
 import logging as log
@@ -39,9 +40,9 @@ def preprocessing(input_image, height, width):
     - Reshape the image to add a "batch" of 1 at the start 
     '''
     height, width, channels = input_image.shape
-    log.info(height)
-    log.info(width)
-    log.info(channels)
+    log.debug(height)
+    log.debug(width)
+    log.debug(channels)
 
 
     image = np.copy(input_image)
@@ -72,18 +73,16 @@ class Network:
         model_bin = os.path.splitext(self.model_xml)[0] + ".bin"
         net = IENetwork(model=self.model_xml, weights=model_bin)
 
-        log.info('Get supported layers')
+        log.debug('Get supported layers')
         plugin.add_extension(self.CPU_EXTENSION, "CPU")
-        supported_layers = plugin.query_network(network=net, device_name="CPU")
-        log.info('Supported layers length: ')
-        log.info(len(supported_layers))
 
+        supported_layers = plugin.query_network(network=net, device_name="CPU")
         log.debug('Supported layers: ')
         log.debug(supported_layers)
 
         unsupported_layers = [l for l in net.layers.keys() if l not in supported_layers]
-        log.info('Unsupported layers length: ')
-        log.info(len(unsupported_layers))
+        log.debug('Unsupported layers length: ')
+        log.debug(len(unsupported_layers))
 
         log.debug('Unsupported Layers: ')
         log.debug(unsupported_layers)
@@ -107,7 +106,7 @@ class Network:
         return
 
     def get_output(self, image):
-        log.info('Exec Net.')
+        log.debug('Exec Net.')
 
         ### TODO: Handle the input stream ###
 #        TEST_IMAGE = 'car.jpg'
@@ -118,16 +117,16 @@ class Network:
         input_blob = next(iter(self.exec_net.inputs))
         output_blob = next(iter(self.exec_net.outputs))
 
-        log.debug('Preprocessed.')
-
-        result = self.exec_net.infer({input_blob: preprocessed_image})
-
         log.debug("result")
         log.debug(output_blob)
+        log.debug('Preprocessed.')
 
-
+        start = time.time()
+        result = self.exec_net.infer({input_blob: preprocessed_image})
         result = self.exec_net.requests[0].outputs[output_blob]
 
+        end = time.time()
+        log.debug(end - start)
         log.info(result[0][0][0])
 
 
