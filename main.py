@@ -26,6 +26,7 @@ import time
 import socket
 import json
 import cv2
+import time
 
 import numpy as np
 import logging as log
@@ -70,20 +71,19 @@ def build_argparser():
 
 
 def connect_mqtt():
-    ### TODO: Connect to the MQTT client ###
-    client = None
-
+    client = mqtt.Client()
+    client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
     return client
 
-def draw_boxes(frame, result, width, height, prob_threshold):
-    for box in result[0][0]: 
-        conf = box[2]
-        if conf >= prob_threshold:
-            xmin = int(box[3] * width)
-            ymin = int(box[4] * height)
-            xmax = int(box[5] * width)
-            ymax = int(box[6] * height)
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
+
+
+def draw_boxes(frame, persons, width, height):
+    for box in persons:
+        xmin = int(box[3] * width)
+        ymin = int(box[4] * height)
+        xmax = int(box[5] * width)
+        ymax = int(box[6] * height)
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (255, 0, 0), 2)
 
     return frame
 
@@ -124,26 +124,70 @@ def infer_on_stream(args, client):
     prob_threshold = args.prob_threshold
     cap = cv2.VideoCapture("resources/video.mp4")
 
+    total = 0
+    frames_without_person = 6
+    is_person_in_frame = False
+    was_person_in_frame = False
+    last_persons = []
+
     while cap.isOpened():
         flag, frame = cap.read()
         if not flag: break
 
-        image = cv2.imread('image.jpeg')
+        image = cv2.resize(frame, (300, 300))
         preprocessed_image = preprocessing(image, 300, 300)
 
         result = infer_network.get_output(preprocessed_image)
-        frame = draw_boxes(frame, result, 768, 432, prob_threshold)
+        persons = [x for x in result[0][0] if x[1] == 1 and x[2] > prob_threshold]
 
+        if persons: frames_without_person = 0
+
+
+        elif frames_without_person < 6:
+            persons = [x for x in result[0][0] if x[1] == 1 and x[2] > 0.25]
+            if persons: frames_without_person = 0
+
+            elif frames_without_person < 2: 
+                persons = last_persons
+                frames_without_person += 1
+
+            elif frames_without_person < 12 and float(last_persons[0][3]) > 0.4 and last_persons[0][5] < 0.8:
+                persons = last_persons
+                frames_without_person = 0
+
+            else: 
+                frames_without_person += 1
+        
+        else:
+                frames_without_person += 1
+
+        is_person_in_frame = True if persons else False
+
+        if is_person_in_frame:
+            count = len(persons)
+            total = count + total
+            client.publish("person", json.dumps({"count": count }))
+
+        if is_person_in_frame and not was_person_in_frame:
+            start = time.time()
+
+        if was_person_in_frame and not is_person_in_frame:
+            end = time.time()
+            duration = int(end - start)
+
+            client.publish("person", json.dumps({"count": 0, "total": total }))
+            client.publish("person/duration", json.dumps({"duration": duration}))
+
+        was_person_in_frame = is_person_in_frame
+        if persons: last_persons = persons
+
+
+        frame = draw_boxes(frame, persons, 768, 432)
         sys.stdout.buffer.write(frame)
         sys.stdout.flush()
 
 
 
-
-        ### TODO: Calculate and send relevant information on ###
-        ### current_count, total_count and duration to the MQTT server ###
-        ### Topic "person": keys of "count" and "total" ###
-        ### Topic "person/duration": key of "duration" ###
 
         ### TODO: Write an output image if `single_image_mode` ###
 
@@ -158,8 +202,10 @@ def main():
     # Grab command line args
     log.getLogger().setLevel(log.INFO)
     args = build_argparser().parse_args()
+
     # Connect to the MQTT server
     client = connect_mqtt()
+
     # Perform inference on the input stream
     infer_on_stream(args, client)
 

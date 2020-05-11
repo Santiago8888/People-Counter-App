@@ -57,6 +57,6 @@ class Network:
         input_blob = next(iter(self.exec_net.inputs))
         output_blob = next(iter(self.exec_net.outputs))
 
-        result = self.exec_net.infer({input_blob: preprocessed_image})
+        result = self.exec_net.infer({input_blob: image})
         result = self.exec_net.requests[0].outputs[output_blob]
         return result
